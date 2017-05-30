@@ -7,6 +7,7 @@ import (
 type place struct {
 	board  *board
 	group  *group
+	id     int
 	row    int
 	column int
 	color  Color
@@ -39,18 +40,81 @@ func (p *place) getNeighbors() []*place {
 	return neighbors
 }
 
-func (p *place) die() {
-	enemyGroups := make(map[*group]bool)
+func (p *place) analyzeNeighbors(color Color) (bool, []*group) {
+	libertiesMap := make(map[*place]struct{})
+	friendGroupsMap := make(map[*group]struct{})
+	enemyGroupsMap := make(map[*group]struct{})
+
 	for _, n := range p.getNeighbors() {
-		if n.color != Empty && n.color != p.color {
-			enemyGroups[n.group] = true
+		if n.color == Empty {
+			libertiesMap[n] = struct{}{}
+		} else if n.color == color {
+			friendGroupsMap[n.group] = struct{}{}
+		} else {
+			enemyGroupsMap[n.group] = struct{}{}
 		}
 	}
-	for eg := range enemyGroups {
-		eg.liberties++
+
+	noLiberties := true
+	for fg := range friendGroupsMap {
+		for _, fgp := range fg.places {
+			for _, fgpn := range fgp.getNeighbors() {
+				if fgpn != p && fgpn.color == Empty {
+					noLiberties = false
+					break
+				}
+			}
+		}
 	}
-	p.group = nil
-	p.color = Empty
+
+	dyingEnemyGroups := make([]*group, 0)
+	for eg := range enemyGroupsMap {
+		if eg.liberties == 1 {
+			dyingEnemyGroups = append(dyingEnemyGroups, eg)
+		}
+	}
+
+	return noLiberties, dyingEnemyGroups
+}
+
+func (p *place) analyzeNeighbors2(color Color) (int, []*group, []*group) {
+	libertiesMap := make(map[*place]struct{})
+	friendGroupsMap := make(map[*group]struct{})
+	enemyGroupsMap := make(map[*group]struct{})
+
+	for _, n := range p.getNeighbors() {
+		if n.color == Empty {
+			libertiesMap[n] = struct{}{}
+		} else if n.color == color {
+			friendGroupsMap[n.group] = struct{}{}
+		} else {
+			enemyGroupsMap[n.group] = struct{}{}
+		}
+	}
+
+	for fg := range friendGroupsMap {
+		for _, fgp := range fg.places {
+			for _, fgpn := range fgp.getNeighbors() {
+				if fgpn != p && fgpn.color == Empty {
+					libertiesMap[fgpn] = struct{}{}
+				}
+			}
+		}
+	}
+
+	dyingEnemyGroups := make([]*group, 0)
+	for eg := range enemyGroupsMap {
+		if eg.liberties == 1 {
+			dyingEnemyGroups = append(dyingEnemyGroups, eg)
+		}
+	}
+
+	friendGroups := make([]*group, 0, len(friendGroupsMap))
+	for fg := range friendGroupsMap {
+		friendGroups = append(friendGroups, fg)
+	}
+
+	return len(libertiesMap), friendGroups, dyingEnemyGroups
 }
 
 func (p *place) put(color Color) error {
@@ -61,39 +125,10 @@ func (p *place) put(color Color) error {
 		return errors.New("place already occupied")
 	}
 
-	liberties := make(map[*place]bool)
-	friendGroups := make(map[*group]bool)
-	enemyGroups := make(map[*group]bool)
+	libertiesCount, friendGroups, dyingEnemyGroups := p.analyzeNeighbors2(color)
 
-	for _, n := range p.getNeighbors() {
-		if n.color == Empty {
-			liberties[n] = true
-		} else if n.color == color {
-			friendGroups[n.group] = true
-		} else {
-			enemyGroups[n.group] = true
-		}
-	}
-
-	for fg := range friendGroups {
-		for _, fgp := range fg.places {
-			for _, fgpn := range fgp.getNeighbors() {
-				if fgpn.color == Empty {
-					liberties[fgpn] = true
-				}
-			}
-		}
-	}
-
-	dyingEnemyGroups := make([]*group, 0)
-	for eg := range enemyGroups {
-		if eg.liberties == 1 {
-			dyingEnemyGroups = append(dyingEnemyGroups, eg)
-		}
-	}
-
-	if len(liberties) == 0 && len(dyingEnemyGroups) == 0 {
-		return errors.New("place haven't life and no neighbor enemy group is dying")
+	if libertiesCount == 0 && len(dyingEnemyGroups) == 0 {
+		return errors.New("place haven't life and no dying neighbor enemy group around")
 	}
 
 	p.color = color
@@ -104,7 +139,7 @@ func (p *place) put(color Color) error {
 		}
 	} else {
 		var baseGroup *group
-		for fg := range friendGroups {
+		for _, fg := range friendGroups {
 			if baseGroup == nil {
 				baseGroup = fg
 				continue
@@ -112,7 +147,7 @@ func (p *place) put(color Color) error {
 			baseGroup.join(fg)
 		}
 		baseGroup.places = append(baseGroup.places, p)
-		baseGroup.liberties = len(liberties)
+		baseGroup.liberties = libertiesCount
 	}
 
 	for _, eg := range dyingEnemyGroups {
@@ -120,4 +155,18 @@ func (p *place) put(color Color) error {
 	}
 
 	return nil
+}
+
+func (p *place) die() {
+	enemyGroups := make(map[*group]struct{})
+	for _, n := range p.getNeighbors() {
+		if n.color != Empty && n.color != p.color {
+			enemyGroups[n.group] = struct{}{}
+		}
+	}
+	for eg := range enemyGroups {
+		eg.liberties++
+	}
+	p.group = nil
+	p.color = Empty
 }

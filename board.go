@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-type boardHashSum [md5.Size]byte
+type hashSum [md5.Size]byte
 
 type board struct {
 	size   int
@@ -46,12 +46,12 @@ func (b *board) put(row int, column int, color Color) error {
 	return p.put(color)
 }
 
-func (b *board) getHashSum() boardHashSum {
+func (b *board) getHashSum() hashSum {
 	bytes := make([]byte, b.size*b.size)
 	for r := 0; r < b.size; r++ {
 		for c := 0; c < b.size; c++ {
 			bytes[r*b.size+c] = byte(b.places[r][c].color)
 		}
 	}
-	return boardHashSum(md5.Sum(bytes))
+	return hashSum(md5.Sum(bytes))
 }
