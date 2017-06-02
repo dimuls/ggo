@@ -9,8 +9,9 @@ import (
 type hashSum [md5.Size]byte
 
 type board struct {
-	size   int
-	places [][]*place
+	size    int
+	places  [][]*place
+	koPlace *place
 }
 
 func newBoard(size int) *board {

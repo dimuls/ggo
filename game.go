@@ -2,66 +2,42 @@ package ggo
 
 import (
 	"errors"
+
+	"github.com/someanon/ggo/timer"
 )
 
 type Parameters struct {
-	BoardSize int `json:"boardSize"`
-}
-
-type State struct {
-	MoveID           int           `json:"moveID"`
-	MoveColor        Color         `json:"moveColor"`
-	DisallowedPlaces map[int]bool  `json:"disallowedPlaces"`
-	Stones           map[int]Color `json:"stones"`
+	BoardSize  int               `json:"boardSize"`
+	TimeSystem *timer.Parameters `json:"timeSystem"`
 }
 
 type Game struct {
 	parameters       Parameters
 	board            *board
-	boardStates      map[hashSum]struct{}
+	timer            *timer.Timer
 	moveColor        Color
 	moveID           int
-	disallowedPlaces map[int]struct{}
+	disallowedPlaces map[[2]int]nothing
 }
 
 func NewGame(parameters Parameters) *Game {
 	g := &Game{
 		parameters:       parameters,
 		board:            newBoard(parameters.BoardSize),
-		boardStates:      make(map[hashSum]struct{}),
+		timer:            nil,
 		moveColor:        Black,
 		moveID:           1,
 		disallowedPlaces: nil,
 	}
-	g.computeAvailableMoves()
+	g.computeDisallowedMoves()
 	return g
-}
-
-func (g *Game) GetState() State {
-	s := State{
-		MoveID:           g.moveID,
-		MoveColor:        g.moveColor,
-		DisallowedPlaces: make(map[int]bool, len(g.disallowedPlaces)),
-		Stones:           make(map[int]Color),
-	}
-	for dp := range g.disallowedPlaces {
-		s.DisallowedPlaces[dp] = false
-	}
-	for r := 0; r < g.board.size; r++ {
-		for c := 0; c < g.board.size; c++ {
-			if g.board.places[r][c].color != Empty {
-				s.Stones[g.board.getPlaceID(r, c)] = g.board.places[r][c].color
-			}
-		}
-	}
-	return s
 }
 
 func (g *Game) Move(row int, column int, color Color) error {
 	if g.moveColor != color {
 		return errors.New("turn of another color")
 	}
-	if _, exists := g.disallowedPlaces[g.board.getPlaceID(row, column)]; exists {
+	if _, exists := g.disallowedPlaces[[2]int{row, column}]; exists {
 		return errors.New("move is  disallowed")
 	}
 	err := g.board.put(row, column, color)
@@ -69,8 +45,7 @@ func (g *Game) Move(row int, column int, color Color) error {
 		return err
 	}
 	g.nextMove()
-	g.boardStates[g.board.getHashSum()] = true
-	g.computeAvailableMoves()
+	g.computeDisallowedMoves()
 }
 
 func (g *Game) Pass(color Color) error {
@@ -92,26 +67,20 @@ func (g *Game) nextColor(color Color) Color {
 	return Black
 }
 
-func (g *Game) computeAvailableMoves() {
-	g.disallowedPlaces = make(map[int]struct{})
+func (g *Game) computeDisallowedMoves() {
+	g.disallowedPlaces = make(map[[2]int]nothing)
 	for r := 0; r < g.board.size; r++ {
 		for c := 0; c < g.board.size; c++ {
-			pID := g.board.getPlaceID(r, c)
 			p := g.board.places[r][c]
-			noLiberties, dyingEnemyGroups := p.analyzeNeighbors(g.moveColor)
-			if noLiberties && len(dyingEnemyGroups) == 0 {
-				g.disallowedPlaces[pID] = struct{}{}
-			} else if len(dyingEnemyGroups) == 1 && len(dyingEnemyGroups[0].places) == 1 {
-				// we need to check for ko
-				p.color = g.moveColor
-				dyingEnemyGroups[0].places[0].color = Empty
-				if _, exists := g.boardStates[g.board.getHashSum()]; exists {
-					// ko place, disallow
-					g.disallowedPlaces[pID] = struct{}{}
+			if p.color == Empty {
+				libertiesCount, _, dyingEnemyGroups := p.analyzeNeighbors(g.moveColor)
+				if libertiesCount == 0 && len(dyingEnemyGroups) == 0 {
+					g.disallowedPlaces[[2]int{r, c}] = nothing{}
 				}
-				p.color = Empty
-				dyingEnemyGroups[0].places[0].color = g.nextColor(g.moveColor)
 			}
 		}
+	}
+	if g.board.koPlace != nil {
+		g.disallowedPlaces[[2]int{g.board.koPlace.row, g.board.koPlace.column}] = nothing{}
 	}
 }
