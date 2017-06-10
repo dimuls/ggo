@@ -5,13 +5,6 @@ import (
 	"time"
 )
 
-type Parameters struct {
-	Base    int `json:"base"`
-	ByoYomi int `json:"byoYomi"`
-	Periods int `json:"periods"`
-	Moves   int `json:"moves"`
-}
-
 type mode int
 
 const (
@@ -19,10 +12,17 @@ const (
 	period
 )
 
+type Parameters struct {
+	Base    int `json:"base"`
+	ByoYomi int `json:"byoYomi"`
+	Periods int `json:"periods"`
+	Moves   int `json:"moves"`
+}
+
 type Callbacks struct {
-	OnBaseExpire   func()
-	OnPeriodExpire func()
-	OnExpire       func()
+	OnBaseOver   func()
+	OnPeriodOver func()
+	OnOver       func()
 }
 
 type Timer struct {
@@ -36,7 +36,7 @@ type Timer struct {
 
 	mode mode
 
-	expired bool
+	over bool
 
 	startedAt time.Time
 
@@ -57,24 +57,22 @@ func NewTimer(parameters Parameters, callbacks Callbacks) (*Timer, error) {
 		return nil, errors.New("both base and byo-yomi duration can't be zero")
 	}
 
-	if parameters.ByoYomi > 0 {
-		if parameters.Periods < 1 {
-			return nil, errors.New("periods should be greater than zero")
-		}
-		if parameters.Moves < 1 {
-			return nil, errors.New("moves should be greater than zero")
-		}
-		if parameters.Periods > 1 {
-			if parameters.Moves > 1 {
-				return nil, errors.New("moves should be zero")
-			}
-		}
-	} else {
+	if parameters.ByoYomi == 0 {
 		if parameters.Periods != 0 {
 			return nil, errors.New("periods should be zero")
 		}
 		if parameters.Moves != 0 {
 			return nil, errors.New("moves should be zero")
+		}
+	} else {
+		if parameters.Periods < 1 {
+			return nil, errors.New("periods should be greater than zero")
+		}
+		if parameters.Moves < 1 {
+			return nil, errors.New("moves should be greater than one")
+		}
+		if parameters.Periods > 1 && parameters.Moves > 1 {
+			return nil, errors.New("both periods and moves can't be greater than one")
 		}
 	}
 
@@ -85,7 +83,7 @@ func NewTimer(parameters Parameters, callbacks Callbacks) (*Timer, error) {
 		byoYomi:    time.Duration(parameters.ByoYomi) * time.Second,
 		periods:    parameters.Periods,
 		moves:      parameters.Moves,
-		expired:    false,
+		over:       false,
 		timer:      nil,
 	}
 
@@ -99,7 +97,7 @@ func NewTimer(parameters Parameters, callbacks Callbacks) (*Timer, error) {
 }
 
 func (t *Timer) Switch() {
-	if t.expired {
+	if t.over {
 		return
 	}
 	if t.timer == nil {
@@ -119,11 +117,11 @@ func (t *Timer) switchOn() {
 }
 
 func (t *Timer) startBaseTimer() {
-	t.timer = time.AfterFunc(t.base, t.onBaseExpire)
+	t.timer = time.AfterFunc(t.base, t.onBaseOver)
 }
 
 func (t *Timer) startPeriodTimer() {
-	t.timer = time.AfterFunc(t.byoYomi, t.onPeriodExpire)
+	t.timer = time.AfterFunc(t.byoYomi, t.onPeriodOver)
 }
 
 func (t *Timer) switchOff() {
@@ -150,33 +148,33 @@ func (t *Timer) stopPeriodTimer() {
 	t.byoYomi = t.byoYomi - time.Now().Sub(t.startedAt)
 }
 
-func (t *Timer) onBaseExpire() {
+func (t *Timer) onBaseOver() {
 	if t.parameters.ByoYomi == 0 {
-		t.expired = true
-		if t.callbacks.OnExpire != nil {
-			t.callbacks.OnExpire()
+		t.over = true
+		if t.callbacks.OnOver != nil {
+			t.callbacks.OnOver()
 		}
 	} else {
 		t.mode = period
 		t.startPeriodTimer()
-		if t.callbacks.OnBaseExpire != nil {
-			t.callbacks.OnBaseExpire()
+		if t.callbacks.OnBaseOver != nil {
+			t.callbacks.OnBaseOver()
 		}
 	}
 }
 
-func (t *Timer) onPeriodExpire() {
+func (t *Timer) onPeriodOver() {
 	t.periods--
 	if t.periods == 0 {
-		t.expired = true
-		if t.callbacks.OnExpire != nil {
-			t.callbacks.OnExpire()
+		t.over = true
+		if t.callbacks.OnOver != nil {
+			t.callbacks.OnOver()
 		}
 	} else {
 		t.byoYomi = time.Duration(t.parameters.ByoYomi) * time.Second
 		t.startPeriodTimer()
-		if t.callbacks.OnPeriodExpire != nil {
-			t.callbacks.OnPeriodExpire()
+		if t.callbacks.OnPeriodOver != nil {
+			t.callbacks.OnPeriodOver()
 		}
 	}
 }
