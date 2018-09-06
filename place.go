@@ -9,7 +9,6 @@ type nothing struct{}
 type place struct {
 	board  *board
 	group  *group
-	id     int
 	row    int
 	column int
 	color  Color
@@ -25,18 +24,18 @@ func newPlace(board *board, row int, column int) *place {
 	}
 }
 
-func (p *place) getNeighbors() []*place {
+func (p *place) neighbors() []*place {
 	neighbors := make([]*place, 0, 2)
-	if p, err := p.board.getPlace(p.row-1, p.column); err == nil {
+	if p, err := p.board.place(p.row-1, p.column); err == nil {
 		neighbors = append(neighbors, p)
 	}
-	if p, err := p.board.getPlace(p.row, p.column-1); err == nil {
+	if p, err := p.board.place(p.row, p.column-1); err == nil {
 		neighbors = append(neighbors, p)
 	}
-	if p, err := p.board.getPlace(p.row+1, p.column); err == nil {
+	if p, err := p.board.place(p.row+1, p.column); err == nil {
 		neighbors = append(neighbors, p)
 	}
-	if p, err := p.board.getPlace(p.row, p.column+1); err == nil {
+	if p, err := p.board.place(p.row, p.column+1); err == nil {
 		neighbors = append(neighbors, p)
 	}
 	return neighbors
@@ -47,7 +46,7 @@ func (p *place) analyzeNeighbors(color Color) (int, []*group, []*group) {
 	friendGroupsMap := make(map[*group]nothing)
 	enemyGroupsMap := make(map[*group]nothing)
 
-	for _, n := range p.getNeighbors() {
+	for _, n := range p.neighbors() {
 		if n.color == Empty {
 			libertiesMap[n] = nothing{}
 		} else if n.color == color {
@@ -59,7 +58,7 @@ func (p *place) analyzeNeighbors(color Color) (int, []*group, []*group) {
 
 	for fg := range friendGroupsMap {
 		for _, fgp := range fg.places {
-			for _, fgpn := range fgp.getNeighbors() {
+			for _, fgpn := range fgp.neighbors() {
 				if fgpn != p && fgpn.color == Empty {
 					libertiesMap[fgpn] = nothing{}
 				}
@@ -132,7 +131,7 @@ func (p *place) put(color Color) error {
 
 func (p *place) die() {
 	enemyGroups := make(map[*group]struct{})
-	for _, n := range p.getNeighbors() {
+	for _, n := range p.neighbors() {
 		if n.color != Empty && n.color != p.color {
 			enemyGroups[n.group] = nothing{}
 		}

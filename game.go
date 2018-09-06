@@ -38,7 +38,7 @@ func (g *Game) Move(row int, column int, color Color) error {
 		return errors.New("turn of another color")
 	}
 	if _, exists := g.disallowedPlaces[[2]int{row, column}]; exists {
-		return errors.New("move is  disallowed")
+		return errors.New("move is disallowed")
 	}
 	err := g.board.put(row, column, color)
 	if err != nil {
@@ -46,6 +46,7 @@ func (g *Game) Move(row int, column int, color Color) error {
 	}
 	g.nextMove()
 	g.computeDisallowedMoves()
+	return nil
 }
 
 func (g *Game) Pass(color Color) error {
@@ -53,6 +54,7 @@ func (g *Game) Pass(color Color) error {
 		return errors.New("turn of another color")
 	}
 	g.nextMove()
+	return nil
 }
 
 func (g *Game) nextMove() {

@@ -28,11 +28,11 @@ func newBoard(size int) *board {
 	return b
 }
 
-func (b *board) getPlaceID(row int, column int) int {
+func (b *board) placeID(row int, column int) int {
 	return row*b.size + column
 }
 
-func (b *board) getPlace(row int, column int) (*place, error) {
+func (b *board) place(row int, column int) (*place, error) {
 	if row < 0 || column < 0 || row >= b.size || column >= b.size {
 		return nil, errors.New(fmt.Sprintf("place not found at row=%d, column=%d", row, column))
 	}
@@ -40,14 +40,14 @@ func (b *board) getPlace(row int, column int) (*place, error) {
 }
 
 func (b *board) put(row int, column int, color Color) error {
-	p, err := b.getPlace(row, column)
+	p, err := b.place(row, column)
 	if err != nil {
 		return err
 	}
 	return p.put(color)
 }
 
-func (b *board) getHashSum() hashSum {
+func (b *board) hashSum() hashSum {
 	bytes := make([]byte, b.size*b.size)
 	for r := 0; r < b.size; r++ {
 		for c := 0; c < b.size; c++ {
